@@ -28,6 +28,7 @@ GET_USER_INFO_API = 'https://account-api.haier.net/v2/haier/userinfo'
 GET_DEVICES_API = 'https://uws.haier.net/uds/v1/protected/deviceinfos'
 GET_WSS_GW_API = 'https://uws.haier.net/gmsWS/wsag/assign'
 GET_DIGITAL_MODEL_API = 'https://uws.haier.net/shadow/v1/devdigitalmodels'
+REFRESH_TOKEN_API = 'https://zj.haier.net/api-gw/oauthserver/account/v1/refreshToken'
 
 
 def random_str(length: int = 32) -> str:
@@ -74,7 +75,7 @@ class HaierClient:
         headers = await self._generate_common_headers(GET_DEVICES_API)
         async with self._session.get(url=GET_DEVICES_API, headers=headers) as response:
             content = await response.json(content_type=None)
-            self._assert_response_successful(content)
+            await self._assert_response_successful(content)
 
             devices = []
             for raw in content['deviceinfos']:
@@ -102,7 +103,7 @@ class HaierClient:
         headers = await self._generate_common_headers(GET_DIGITAL_MODEL_API, json.dumps(payload))
         async with self._session.post(url=GET_DIGITAL_MODEL_API, json=payload, headers=headers) as response:
             content = await response.json(content_type=None)
-            self._assert_response_successful(content)
+            await self._assert_response_successful(content)
 
             if deviceId not in content['detailInfo']:
                 _LOGGER.warning("Device {} get digital model fail. response: {}".format(
@@ -304,7 +305,7 @@ class HaierClient:
         headers = await self._generate_common_headers(GET_WSS_GW_API, json.dumps(payload))
         async with self._session.post(url=GET_WSS_GW_API, json=payload, headers=headers) as response:
             content = await response.json(content_type=None)
-            self._assert_response_successful(content)
+            await self._assert_response_successful(content)
 
             return content['agAddr'].replace('http://', 'wss://')
 
@@ -334,9 +335,34 @@ class HaierClient:
             'language': 'zh-CN'
         }
 
-    @staticmethod
-    def _assert_response_successful(resp):
+    async def try_refresh_token(self):
+        if not self._cfg.refresh_token:
+            return
+
+        _LOGGER.info('Try to refresh token...')
+
+        payload = {
+            'refreshToken': self._cfg.refresh_token,
+        }
+        headers = await self._generate_common_headers(REFRESH_TOKEN_API, json.dumps(payload))
+        async with self._session.post(url=REFRESH_TOKEN_API, json=payload, headers=headers) as response:
+            content = await response.json(content_type=None)
+            _LOGGER.debug('Refresh token response: ' + json.dumps(content))
+
+            if content['retCode'] != '00000':
+                _LOGGER.error(f'Failed to refresh token ({content["retCode"]}): {content.get("retInfo", "")}')
+                return
+
+            self._cfg.token = content['data']['tokenInfo']['accountToken']
+            self._cfg.save()
+
+            _LOGGER.info('Token refreshed successfully')
+
+    async def _assert_response_successful(self, resp):
         if 'retCode' in resp and resp['retCode'] != '00000':
+            if resp['retCode'] == 'D00004': # retInfo: 'Token已过期，未通过token验证'
+                await self.try_refresh_token()
+
             raise HaierClientException('接口返回异常: ' + resp['retInfo'])
 
     @staticmethod

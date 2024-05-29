@@ -16,6 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import EVENT_DEVICE_CONTROL, EVENT_DEVICE_DATA_CHANGED, EVENT_WSS_GATEWAY_STATUS_CHANGED
 from .device import HaierDevice
+from .config import AccountConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,9 +39,8 @@ class HaierClientException(Exception):
 
 class HaierClient:
 
-    def __init__(self, hass: HomeAssistant, client_id: str, token: str):
-        self._client_id = client_id
-        self._token = token
+    def __init__(self, hass: HomeAssistant, cfg: AccountConfig):
+        self._cfg = cfg
         self._hass = hass
         self._session = async_get_clientsession(hass)
 
@@ -54,7 +54,7 @@ class HaierClient:
         :return:
         """
         headers = {
-            'Authorization': f'Bearer {self._token}',
+            'Authorization': f'Bearer {self._cfg.token}',
         }
         async with self._session.get(url=GET_USER_INFO_API, headers=headers) as response:
             content = await response.json(content_type=None)
@@ -124,9 +124,9 @@ class HaierClient:
         _LOGGER.debug("WSSGateway: %s", server)
 
         # https://docs.aiohttp.org/en/stable/client_quickstart.html#aiohttp-client-websockets
-        agClientId = self._token
+        agClientId = self._cfg.token
         while True:
-            url = '{}/userag?token={}&agClientId={}'.format(server, self._token, agClientId)
+            url = '{}/userag?token={}&agClientId={}'.format(server, self._cfg.token, agClientId)
             async with self._session.ws_connect(url) as ws:
                 try:
                     # 每60秒发送一次心跳包
@@ -297,8 +297,8 @@ class HaierClient:
         :return:
         """
         payload = {
-            'clientId': self._client_id,
-            'token': self._token
+            'clientId': self._cfg.client_id,
+            'token': self._cfg.token
         }
 
         headers = await self._generate_common_headers(GET_WSS_GW_API, json.dumps(payload))
@@ -322,11 +322,11 @@ class HaierClient:
         sequence_id = time.strftime('%Y%m%d%H%M%S') + str(random.randint(100000, 999999))
 
         return {
-            'accessToken': self._token,
+            'accessToken': self._cfg.token,
             'appId': APP_ID,
             'appKey': APP_KEY,
             'appVersion': APP_VERSION,
-            'clientId': self._client_id,
+            'clientId': self._cfg.client_id,
             'sequenceId': sequence_id,
             'sign': self._sign(APP_ID, APP_KEY, timestamp, body, api),
             'timestamp': timestamp,

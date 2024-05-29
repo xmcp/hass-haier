@@ -9,7 +9,7 @@ from homeassistant.helpers.storage import Store
 from .const import DOMAIN, SUPPORTED_PLATFORMS, FILTER_TYPE_EXCLUDE, FILTER_TYPE_INCLUDE
 from .core.attribute import HaierAttribute
 from .core.client import HaierClient, EVENT_DEVICE_DATA_CHANGED
-from .core.config import AccountConfig, DeviceFilterConfig, EntityFilterConfig
+from .core.config import AccountConfig, DeviceFilterConfig, EntityFilterConfig, AccountConfigHass
 from .core.device import HaierDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,8 +20,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         'devices': []
     })
 
-    account_cfg = AccountConfig(hass, entry)
-    client = HaierClient(hass, account_cfg.client_id, account_cfg.token)
+    account_cfg = AccountConfigHass(hass, entry)
+    client = HaierClient(hass, account_cfg)
     devices = await client.get_devices()
     _LOGGER.debug('共获取到{}个设备'.format(len(devices)))
 

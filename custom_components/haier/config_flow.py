@@ -10,7 +10,7 @@ from homeassistant.helpers.config_validation import multi_select
 
 from .const import DOMAIN, FILTER_TYPE_EXCLUDE, FILTER_TYPE_INCLUDE
 from .core.client import HaierClientException, HaierClient
-from .core.config import AccountConfig, DeviceFilterConfig, EntityFilterConfig
+from .core.config import AccountConfig, DeviceFilterConfig, EntityFilterConfig, AccountConfigHass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +23,10 @@ class HaierConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 # 校验账号密码是否正确
-                client = HaierClient(self.hass, user_input[CONF_CLIENT_ID], user_input[CONF_TOKEN])
+                cfg = AccountConfig()
+                cfg.client_id = user_input[CONF_CLIENT_ID]
+                cfg.token = user_input[CONF_TOKEN]
+                client = HaierClient(self.hass, cfg)
                 user_info = await client.get_user_info()
 
                 return self.async_create_entry(title="Haier - {}".format(user_info['mobile']), data={
@@ -39,6 +42,7 @@ class HaierConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_CLIENT_ID): str,
                     vol.Required(CONF_TOKEN): str,
+                    vol.Required('refresh_token'): str,
                     vol.Required('default_load_all_entity', default=True): bool,
                 }
             ),
@@ -74,17 +78,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """
         errors: Dict[str, str] = {}
 
-        cfg = AccountConfig(self.hass, self.config_entry)
+        cfg = AccountConfigHass(self.hass, self.config_entry)
 
         if user_input is not None:
             # 校验账号密码是否正确
-            client = HaierClient(self.hass, user_input[CONF_CLIENT_ID], user_input[CONF_TOKEN])
-            try:
-                user_info = await client.get_user_info()
+            cfg.client_id = user_input[CONF_CLIENT_ID]
+            cfg.token = user_input[CONF_TOKEN]
+            cfg.refresh_token = user_input['refresh_token']
+            cfg.default_load_all_entity = user_input['default_load_all_entity']
 
-                cfg.client_id = user_input[CONF_CLIENT_ID]
-                cfg.token = user_input[CONF_TOKEN]
-                cfg.default_load_all_entity = user_input['default_load_all_entity']
+            try:
+                client = HaierClient(self.hass, cfg)
+                user_info = await client.get_user_info()
                 cfg.save(user_info['mobile'])
 
                 return self.async_create_entry(title='', data={})
@@ -98,6 +103,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required(CONF_CLIENT_ID, default=cfg.client_id): str,
                     vol.Required(CONF_TOKEN, default=cfg.token): str,
+                    vol.Optional('refresh_token', default=cfg.refresh_token): str,
                     vol.Required('default_load_all_entity', default=cfg.default_load_all_entity): bool,
                 }
             ),

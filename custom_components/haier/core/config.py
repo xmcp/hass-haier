@@ -12,12 +12,18 @@ class AccountConfig:
     账户配置
     """
 
-    client_id: str = None
+    client_id: str = ''
 
-    token: str = None
+    token: str = ''
 
-    default_load_all_entity: bool = None
+    refresh_token: str = ''
 
+    default_load_all_entity: bool = True
+
+    def save(self, mobile: str = None):
+        pass
+
+class AccountConfigHass(AccountConfig):
     def __init__(self, hass: HomeAssistant, config: ConfigEntry):
         self._hass = hass
         self._config = config
@@ -25,6 +31,7 @@ class AccountConfig:
         cfg = config.data.get('account', {})
         self.client_id = cfg.get('client_id', '')
         self.token = cfg.get('token', '')
+        self.refresh_token = cfg.get('refresh_token', '')
         self.default_load_all_entity = cfg.get('default_load_all_entity', True)
 
     def save(self, mobile: str = None):
@@ -36,6 +43,7 @@ class AccountConfig:
                 'account': {
                     'client_id': self.client_id,
                     'token': self.token,
+                    'refresh_token': self.refresh_token,
                     'default_load_all_entity': self.default_load_all_entity
                 }
             }
@@ -115,7 +123,7 @@ class EntityFilterConfig:
     def __init__(self, hass: HomeAssistant, config: ConfigEntry):
         self._hass = hass
         self._config = config
-        self._account_cfg = AccountConfig(hass, config)
+        self._account_cfg = AccountConfigHass(hass, config)
         self._cfg = config.data.get('entity_filter', [])
 
     def set_filter_type(self, device_id: str, filter_type: str):
